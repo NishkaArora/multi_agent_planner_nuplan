@@ -45,9 +45,9 @@ class LQRData:
         #if self.start_iter + self.horizon > self.num_frames:
         #    self.horizon = self.num_frames - self.start_iter + 1
         
-        self.n = neighbors
+        self.neighbors = neighbors
         
-        print(f'\nstart_iter:{self.start_iter}, horizon:{self.horizon}')
+        #print(f'\nstart_iter:{self.start_iter}, horizon:{self.horizon}')
 
         # Variables for reference path BFS
         self.route_roadblocks = []
@@ -71,10 +71,14 @@ class LQRData:
         self.data['current_pos'] = self.get_current_ego_pos()
         
         self.data['future_pos'] = self.get_future_ego_pos()
-        self.data['future_neighbor_pos'] = self.get_future_neighbor_pos_padded()
-        self.data['current_neighbor_pos'] = self.data['future_neighbor_pos'][:, 0, :]
+        #self.data['future_neighbor_pos'] = self.get_future_neighbor_pos_padded()
         
         self.data['current_lane'] = self.get_current_lane()
+
+        self.data['future_neighbor_pos'] = self.get_n_closest_neighbors()
+        self.data['current_neighbor_pos'] = self.data['future_neighbor_pos'][:, 0, :]
+        
+        #self.data['current_lane_global'] = self.data['current_lane']
         
         self.change_frame_to_ego_start()
         self.add_batch_size_dimension()
@@ -86,7 +90,7 @@ class LQRData:
             self.data[key] = torch.unsqueeze(self.data[key], 0)
 
     def change_frame_to_ego_start(self):
-        print(f'Centered at Ego Start Pos: {str((self.curr_state[0], self.curr_state[1]))}') # curr_state[2] is orientation
+        #print(f'Centered at Ego Start Pos: {str((self.curr_state[0], self.curr_state[1]))}') # curr_state[2] is orientation
         
         # use first and 5th point in current_lane to approximate initial instantaneous slope
         if self.data['current_lane'].shape[1] > 5:
@@ -178,6 +182,34 @@ class LQRData:
         for ego in future_true:
             future_ego_pos.append(self.get_xy_from_egostate(ego))
         return torch.Tensor(future_ego_pos)
+    
+    def get_n_closest_neighbors(self):
+        # make sure self.current_lane is populated
+
+        def euc_distance(x, y):
+            return math.sqrt((y[1] - x[1]) ** 2 + (y[0] - x[0]) ** 2)
+
+        closest_neighbors = np.zeros((self.neighbors, self.horizon, 2))
+        
+        # for each frame in 0 to self.horizon-1
+        frame_id = 0
+        for det_track in self.s.get_future_tracked_objects(self.start_iter, time_horizon=self.horizon * 0.1, num_samples=self.horizon):
+            
+            # for each tracked vehicle
+            all_curr_neighbors = []
+            for obj in det_track.tracked_objects.get_tracked_objects_of_type(TrackedObjectType.VEHICLE):
+                all_curr_neighbors.append(self.get_xy_from_agent(obj))
+            
+            cur_ref_point = self.data['current_lane'][frame_id, :]
+            
+            assert(len(all_curr_neighbors) >= self.neighbors)
+            all_curr_neighbors = sorted(all_curr_neighbors, key=lambda pos: euc_distance(pos, cur_ref_point))
+            closest_neighbors_frame = all_curr_neighbors[:self.neighbors]
+
+            closest_neighbors[:, frame_id, :] = closest_neighbors_frame
+            frame_id += 1
+        return torch.Tensor(closest_neighbors)
+
 
     def get_future_neighbor_pos_padded(self):
         veh = {}
@@ -194,7 +226,7 @@ class LQRData:
             for obj in det_track.tracked_objects.get_tracked_objects_of_type(TrackedObjectType.VEHICLE):
                 veh[obj.track_token][frame_id] = self.get_xy_from_agent(obj)
             frame_id += 1
-        if self.n == -1:
+        if self.neighbors == -1:
             n_veh = list(veh.values())
         else:
             n_veh = list(veh.values())[:self.n]

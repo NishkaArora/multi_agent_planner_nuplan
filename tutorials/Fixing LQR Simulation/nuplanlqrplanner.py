@@ -16,7 +16,7 @@ import math
 import numpy as np
 import pickle
 
-filehandler = open(f'saved_data_from_orientation_fixed_lqr_sc{17}_horizon20_speed{5}_withinputs', 'wb')
+# filehandler = open(f'saved_data_from_orientation_fixed_lqr_sc{17}_horizon20_speed{5}_withinputs', 'wb')
 
 class NuPlanLQRPlanner(AbstractPlanner):
     
@@ -73,14 +73,17 @@ class NuPlanLQRPlanner(AbstractPlanner):
                  curr_state.waypoint._oriented_box.center.y,
                  curr_state.waypoint._oriented_box.center.heading)
         
-        inputs = {}
-        inputs['scenario'] = self._scenario
-        inputs['curr_pos'] = start
-        inputs['speed'] = 7
-        inputs['neighbors'] = 4
-        inputs['horizon'] = self._horizon + buffer
+        print(f'Iteration Number: {current_input.iteration.index}')
         
-        s0 = LQRData(self._scenario, curr_state=start, speed=self.speed, neighbors=4, horizon=self._horizon+buffer, start_iter=current_input.iteration.index)
+        # inputs = {}
+        # inputs['scenario'] = self._scenario
+        # inputs['curr_pos'] = start
+        # inputs['speed'] = 7
+        # inputs['neighbors'] = 4
+        # inputs['horizon'] = self._horizon + buffer
+        
+        s0 = LQRData(self._scenario, curr_state=start, speed=self.speed, neighbors=5,
+                     horizon=self._horizon+buffer, start_iter=current_input.iteration.index)
         #print(f'\nProgress: {current_input.iteration.index}/{s0.num_frames}')
         s0.populate_data()
 
@@ -88,10 +91,10 @@ class NuPlanLQRPlanner(AbstractPlanner):
         traj = lqrplanner.forward(s0.data)['traj'].detach().numpy()[0]
         
         # Save s0 and traj
-        save_iter = {}
-        save_iter['data'] = s0
-        save_iter['traj'] = traj
-        save_iter['inputs'] = inputs
+        # save_iter = {}
+        # save_iter['data'] = s0
+        # save_iter['traj'] = traj
+        # save_iter['inputs'] = inputs
         
         
         heading = self.get_heading(traj)
@@ -104,10 +107,10 @@ class NuPlanLQRPlanner(AbstractPlanner):
         #     f.write(str(predictions))
         #     f.write('\n\n')
         
-        print('LQR Output Trajectory Length: ', len(traj_xyh))
+        # print('LQR Output Trajectory Length: ', len(traj_xyh))
         ego_history = current_input.history.ego_states
         
-        print('Horizon: ', s0.horizon)
+        # print('Horizon: ', s0.horizon)
         states = transform_predictions_to_states(predictions, ego_history, round((s0.horizon - buffer) * 0.1, 3), 0.1)
         # if current_input.iteration.index == 95:
         #     import ipdb
@@ -123,9 +126,9 @@ class NuPlanLQRPlanner(AbstractPlanner):
         # output_steps['output_trajectory'] = trajectory
         # save_iter['output_steps'] = output_steps
         
-        self.save_data[current_input.iteration.index] = save_iter
-        if current_input.iteration.index == 148:
-            pickle.dump(self.save_data, filehandler)
+        # self.save_data[current_input.iteration.index] = save_iter
+        # if current_input.iteration.index == 148:
+        #     pickle.dump(self.save_data, filehandler)
             
         #self._trajectory = InterpolatedTrajectory(list(itertools.chain([current_state], states)))
         return trajectory #self._trajectory
