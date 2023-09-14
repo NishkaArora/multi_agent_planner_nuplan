@@ -80,7 +80,7 @@ class NuPlanLQRPlanner(AbstractPlanner):
         inputs['neighbors'] = 4
         inputs['horizon'] = self._horizon + buffer
         
-        s0 = LQRData(self._scenario, curr_state=start, speed=self.speed, neighbors=4, horizon=self._horizon+buffer)
+        s0 = LQRData(self._scenario, curr_state=start, speed=self.speed, neighbors=4, horizon=self._horizon+buffer, start_iter=current_input.iteration.index)
         #print(f'\nProgress: {current_input.iteration.index}/{s0.num_frames}')
         s0.populate_data()
 
@@ -92,16 +92,13 @@ class NuPlanLQRPlanner(AbstractPlanner):
         save_iter['data'] = s0
         save_iter['traj'] = traj
         save_iter['inputs'] = inputs
-        self.save_data[current_input.iteration.index] = save_iter
         
-        if current_input.iteration.index == 148:
-            pickle.dump(self.save_data, filehandler)
-
+        
         heading = self.get_heading(traj)
         traj_xyh = np.array([[pt[0], pt[1], h] for pt, h in zip(traj, heading)])
         abs_states = [StateSE2.deserialize(pose) for pose in traj_xyh]
-        rel_states = absolute_to_relative_poses(abs_states)
-        predictions = np.array([[pose.x, pose.y, pose.heading] for pose in rel_states])[buffer:]
+        #rel_states = relative_to_absolute_poses(abs_states)
+        predictions = np.array([[pose.x, pose.y, pose.heading] for pose in abs_states])[buffer:]
         
         # with open('trajs_lqrplanner.txt', 'a') as f:
         #     f.write(str(predictions))
@@ -112,7 +109,24 @@ class NuPlanLQRPlanner(AbstractPlanner):
         
         print('Horizon: ', s0.horizon)
         states = transform_predictions_to_states(predictions, ego_history, round((s0.horizon - buffer) * 0.1, 3), 0.1)
-        trajectory = InterpolatedTrajectory(states)
+        # if current_input.iteration.index == 95:
+        #     import ipdb
+        #     ipdb.set_trace()
+        trajectory = InterpolatedTrajectory(states)        
+
+        # output_steps = {}
+        # output_steps['traj_xyh'] = traj_xyh
+        # output_steps['abs_states'] = abs_states
+        # #output_steps['rel_states'] = rel_states
+        # output_steps['predictions'] = predictions
+        # output_steps['states'] = states
+        # output_steps['output_trajectory'] = trajectory
+        # save_iter['output_steps'] = output_steps
+        
+        self.save_data[current_input.iteration.index] = save_iter
+        if current_input.iteration.index == 148:
+            pickle.dump(self.save_data, filehandler)
+            
         #self._trajectory = InterpolatedTrajectory(list(itertools.chain([current_state], states)))
         return trajectory #self._trajectory
     
